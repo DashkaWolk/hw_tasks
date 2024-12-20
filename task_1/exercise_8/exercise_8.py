@@ -18,12 +18,22 @@ __enter__(self): Метод, который сохраняет исходные 
 
 __exit__(self, exc_type, exc_value, traceback): Метод, который восстанавливает исходные значения атрибутов после выхода из контекстного менеджера, независимо от того, произошла ли ошибка.
 """
-
-
 # Контекстный менеджер
 class MultiTempAttributes:
-    pass
+    def __init__(self, obj, attrs_values):
+        self.obj = obj
+        self.attrs_values = attrs_values
+        self.original_values = {}
 
+    def __enter__(self):
+        for attr, new_value in self.attrs_values.items():
+            self.original_values[attr] = getattr(self.obj, attr, None)
+            setattr(self.obj, attr, new_value)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for attr, original_value in self.original_values.items():
+            setattr(self.obj, attr, original_value)
 
 """
 № 2 Подсчет уникальных слов
@@ -36,12 +46,23 @@ class MultiTempAttributes:
 После удаления пунктуации текст следует разбить на слова, разделенные пробелами.
 Слово считается уникальным, если оно встречается в тексте только один раз после удаления пунктуации и приведения текста к нижнему регистру.
 """
-
+import string
 
 def count_unique_words(text: str) -> int:
-    pass
+    text = text.lower()
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    words = text.split()
 
-
+    unique_words = set()
+    
+    unique_words_count = 0
+    
+    for word in words:
+        if word not in unique_words:
+            unique_words_count += 1
+            unique_words.add(word)
+    
+    return unique_words_count
 """
 № 3 Анализ четных чисел
 
@@ -57,11 +78,36 @@ numbers: Список целых чисел.
 "max": Максимальное значение четных чисел (или None, если четных чисел нет).
 "min": Минимальное значение четных чисел (или None, если четных чисел нет).
 """
-
+from typing import List, Dict, Optional
 
 def analyze_even_numbers(numbers: List[int]) -> Dict[str, Optional[float]]:
-    pass
+    even_numbers = [num for num in numbers if num % 2 == 0]
 
+    count = len(even_numbers)
+    
+    if count == 0:
+        return {
+            "count": 0,
+            "sum": None,
+            "average": None,
+            "max": None,
+            "min": None,
+        }
+    
+    total_sum = sum(even_numbers)
+    
+    average = total_sum / count
+    
+    max_even = max(even_numbers)
+    min_even = min(even_numbers)
+    
+    return {
+        "count": count,
+        "sum": total_sum,
+        "average": average,
+        "max": max_even,
+        "min": min_even,
+    }
 
 """
 № 4 Проверка уникальности элементов в вложенных структурах данных
@@ -77,13 +123,34 @@ def analyze_even_numbers(numbers: List[int]) -> Dict[str, Optional[float]]:
 Вложенные структуры (например, списки внутри списков и т.д.)
 Функция должна игнорировать значения типа None.
 """
-
-
 def all_unique_elements(data) -> bool:
-    def flatten(d):
-        """Вспомогательная функция для рекурсивного разворачивания вложенных структур"""
-        pass
+    def flatten(d, seen=None):
+        if seen is None:
+            seen = set()
+        
+        if isinstance(d, (str, int, float, bool)):
+            if d is not None:
+                if d in seen:
+                    return False
+                seen.add(d)
+            return True
+        
+        if isinstance(d, (list, tuple, set)):
+            for item in d:
+                if not flatten(item, seen):
+                    return False
+            return True
+        
+        if isinstance(d, dict):
+            frozen_dict = frozenset(d.items())
+            if frozen_dict in seen:
+                return False
+            seen.add(frozen_dict)
+            return True
+        
+        return True
 
+    return flatten(data)
 
 """
 № 5 
@@ -107,7 +174,21 @@ def enumerate_list(
     data: list, start: int = 0, step: int = 1, recursive: bool = False
 ) -> list:
     def recursive_enumerate(lst, idx):
-        pass
+        result = []
+        for item in lst:
+            if isinstance(item, list) and recursive:
+                nested_result, idx = recursive_enumerate(item, idx)
+                result.append(nested_result)
+            else:
+                result.append((idx, item))
+                idx += step
+        return result, idx
+
+    if recursive:
+        result, _ = recursive_enumerate(data, start)
+        return result
+    else:
+        return [(start + i * step, item) for i, item in enumerate(data)]
 
 
 """
@@ -130,10 +211,55 @@ def enumerate_list(
 
 Логирование: Класс должен использовать встроенный модуль logging для записи логов подключения, выполнения запросов, начала и завершения транзакций, а также для обработки ошибок.
 """
+import logging
 
-# Настройка логирования для примера
 logging.basicConfig(level=logging.INFO)
 
-
 class DatabaseConnection:
-    pass
+    def __init__(self, db_name):
+        self.db_name = db_name
+        self.connection = None
+        self.transaction_active = False
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type:
+            self.rollback()
+            logging.error(f"Exception occurred: {exc_type}, {exc_value}")
+        self.close()
+
+    def connect(self):
+        self.connection = f"Connected to {self.db_name} database"
+        logging.info(f"Connected to {self.db_name}")
+
+    def close(self):
+        if self.connection:
+            logging.info(f"Disconnected from {self.db_name}")
+            self.connection = None
+
+    def start_transaction(self):
+        if self.transaction_active:
+            raise RuntimeError("Transaction is already active")
+        self.transaction_active = True
+        logging.info("Transaction started")
+
+    def commit(self):
+        if not self.transaction_active:
+            raise RuntimeError("No active transaction to commit")
+        self.transaction_active = False
+        logging.info("Transaction committed")
+
+    def rollback(self):
+        if not self.transaction_active:
+            raise RuntimeError("No active transaction to rollback")
+        self.transaction_active = False
+        logging.info("Transaction rolled back")
+
+    def execute_query(self, query):
+        if not self.transaction_active:
+            raise RuntimeError("No active transaction")
+        logging.info(f"Executing query: {query}")
+        return f"Result of '{query}'"
